@@ -1,90 +1,65 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-export default function ProductCard({ products }) {
+export default function ProductCard({ product }) {
   const router = useRouter();
 
-  const openProduct = (id) => {
-    router.push(`/products/${id}`);
-  };
+  if (!product) {
+    return null;
+  }
 
   return (
-    <div className="grid gap-4 md:hidden">
-      {products.map((product) => (
-        <div
-          key={product.id}
-          className="rounded-xl bg-white p-5 shadow"
-        >
-          {/* Image */}
-          <button
-            onClick={() =>
-              openProduct(product.id)
-            }
-            className="mb-4 block w-full"
-          >
-            <img
-              src={product.thumbnail}
-              alt={product.title}
-              className="mx-auto h-40 w-full rounded-lg object-contain transition hover:scale-105"
-            />
-          </button>
+    <div className="rounded-xl bg-white p-5 shadow">
+      <div
+        className="cursor-pointer"
+        onClick={() => router.push("/products/" + product.id)}
+      >
+        <Image
+          src={product.thumbnail}
+          alt={product.title}
+          width={300}
+          height={220}
+          className="h-48 w-full rounded-lg object-cover"
+        />
 
-          {/* Title */}
-          <button
-            onClick={() =>
-              openProduct(product.id)
-            }
-            className="text-left text-lg font-bold text-blue-600 hover:underline"
-          >
-            {product.title}
-          </button>
+        <h2 className="mt-4 text-lg font-semibold text-gray-800">
+          {product.title}
+        </h2>
+      </div>
 
-          {/* Category */}
-          <div className="mt-3">
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-700">
-              {product.category}
-            </span>
-          </div>
+      <div className="mt-3 space-y-2 text-sm text-gray-600">
+        <p>
+          <span className="font-medium">Category:</span>{" "}
+          {product.category}
+        </p>
 
-          {/* Price */}
-          <div className="mt-4">
-            <p className="text-sm text-gray-500">
-              Price
-            </p>
+        <p>
+          <span className="font-medium">Price:</span>{" "}
+          ${product.price}
+        </p>
 
-            <p className="text-xl font-bold text-green-600">
-              ${product.price}
-            </p>
-          </div>
+        <p>
+          <span className="font-medium">Rating:</span>{" "}
+          ⭐ {product.rating}
+        </p>
 
-          {/* Rating */}
-          <div className="mt-3">
-            <span className="font-medium">
-              Rating:
-            </span>{" "}
-            ⭐ {product.rating}
-          </div>
+        <p>
+          <span className="font-medium">Stock:</span>{" "}
+          {product.stock}
+        </p>
+      </div>
 
-          {/* Stock */}
-          <div className="mt-2">
-            <span className="font-medium">
-              Stock:
-            </span>{" "}
-            {product.stock}
-          </div>
-
-          {/* Details Button */}
-          <button
-            onClick={() =>
-              openProduct(product.id)
-            }
-            className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
-          >
-            View Details
-          </button>
-        </div>
-      ))}
+      <button
+        type="button"
+        onClick={() =>
+          router.push("/products/" + product.id)
+        }
+        className="mt-4 w-full rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
+      >
+        View Details
+      </button>
     </div>
   );
 }
