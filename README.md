@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Product Admin Dashboard
 
-## Getting Started
+A responsive Product Admin Dashboard built using Next.js, React, Tailwind CSS, Axios, and DummyJSON API.
 
-First, run the development server:
+## Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Next.js
+- React
+- JavaScript
+- Tailwind CSS
+- Axios
+- DummyJSON API
+- Git & GitHub
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Features
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Authentication
+- Login using DummyJSON authentication API
+- Username: `emilys`
+- Password: `emilyspass`
+- Login error handling
+- Authentication token stored in localStorage
+- Token automatically added to API requests
+- Protected product pages
+- Logout functionality
+- Login button is disabled while request is in progress
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Product Management
+- Product list with:
+  - Product image
+  - Title
+  - Category
+  - Price
+  - Rating
+  - Stock
+- Responsive desktop table
+- Responsive mobile product cards
+- Product details page
+- Add product
+- Edit product
+- Delete product
+- Delete confirmation dialog
 
-## Learn More
+### Search
+- Product search using DummyJSON search API
+- 500ms debounce
+- Search resets pagination to page 1
+- Search and category filtering are mutually exclusive because DummyJSON does not support combining both in a single request
+- AbortController is used to prevent old search responses from replacing newer results
 
-To learn more about Next.js, take a look at the following resources:
+### Filtering and Sorting
+- Filter products by category
+- Sort by:
+  - Price
+  - Rating
+  - Title
+- Ascending and descending order
+- Search/category/sort state is preserved in the URL
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Pagination
+- API-based pagination using `limit` and `skip`
+- Page sizes:
+  - 10
+  - 20
+  - 50
+- Previous and Next buttons
+- Page number buttons
+- Result range such as:
+  `Showing 21-40 of 194`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Validation
+- Required field validation
+- Price validation
+- Stock validation
+- Product form validation
+- Duplicate form submission prevention
 
-## Deploy on Vercel
+### Loading and Error Handling
+- Loading spinner
+- Empty state
+- Search no-results state
+- API error message
+- Retry option
+- Invalid URL values are handled safely
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+product-admin-dashboard/
+│
+├── app/
+│   ├── page.js
+│   ├── globals.css
+│   │
+│   └── products/
+│       ├── page.js
+│       ├── add/
+│       │   └── page.js
+│       │
+│       └── [id]/
+│           ├── page.js
+│           └── edit/
+│               └── page.js
+│
+├── components/
+│   ├── Navbar.js
+│   ├── ProductTable.js
+│   ├── ProductCard.js
+│   ├── Pagination.js
+│   ├── SearchBar.js
+│   ├── ProductFilters.js
+│   └── Loader.js
+│
+├── lib/
+│   ├── axios.js
+│   ├── api.js
+│   └── productStore.js
+│
+├── public/
+├── package.json
+└── README.md
