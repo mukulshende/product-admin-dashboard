@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -39,9 +40,10 @@ export default function ProductDetailsPage() {
         setLoading(true);
         setError("");
 
+        const numericId = Number(productId);
         const deletedIds = getDeletedProductIds();
 
-        if (deletedIds.includes(Number(productId))) {
+        if (deletedIds.includes(numericId)) {
           setError("Product not found.");
           setProduct(null);
           return;
@@ -50,34 +52,42 @@ export default function ProductDetailsPage() {
         const addedProducts = getAddedProducts();
 
         const localAddedProduct = addedProducts.find(
-          (item) => Number(item.id) === Number(productId)
+          (item) => Number(item.id) === numericId
         );
 
         const updatedProducts = getUpdatedProducts();
+        const localUpdatedProduct =
+          updatedProducts[String(productId)];
 
-        let data = null;
-
-        try {
-          data = await getProductById(productId);
-        } catch (apiError) {
-          if (!localAddedProduct) {
-            throw apiError;
-          }
-        }
-
+        // Locally added products use localStorage as their source.
         if (localAddedProduct) {
-          data = {
-            ...localAddedProduct,
-            ...(updatedProducts[productId] || {}),
-          };
+          const finalProduct = localUpdatedProduct
+            ? { ...localAddedProduct, ...localUpdatedProduct, id: numericId }
+            : localAddedProduct;
+
+          setProduct(finalProduct);
+          return;
         }
 
-        if (data && updatedProducts[productId]) {
-          data = {
-            ...data,
-            ...updatedProducts[productId],
-          };
+        // Existing API products retain their previous loading behavior.
+        if (localUpdatedProduct) {
+          let apiProduct = {};
+
+          try {
+            apiProduct = await getProductById(productId);
+          } catch (apiError) {
+            console.error("API product loading failed:", apiError);
+          }
+
+          setProduct({
+            ...apiProduct,
+            ...localUpdatedProduct,
+            id: numericId,
+          });
+          return;
         }
+
+        const data = await getProductById(productId);
 
         if (!data) {
           setError("Product not found.");
@@ -94,6 +104,8 @@ export default function ProductDetailsPage() {
         } else {
           setError("Failed to load product.");
         }
+
+        setProduct(null);
       } finally {
         setLoading(false);
       }
@@ -105,28 +117,33 @@ export default function ProductDetailsPage() {
   }, [productId, router]);
 
   const handleDelete = async () => {
-    if (deleting) {
-      return;
-    }
+    if (deleting) return;
 
     const confirmed = window.confirm(
       "Are you sure you want to delete this product?"
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setDeleting(true);
       setError("");
 
-      await deleteProduct(productId);
+      const addedProducts = getAddedProducts();
 
+      const isLocalProduct = addedProducts.some(
+        (item) => Number(item.id) === Number(productId)
+      );
+
+      // Only existing API products need an API delete request.
+      if (!isLocalProduct) {
+        await deleteProduct(productId);
+      }
+
+      // Mark both local and API products as deleted locally.
       addDeletedProductId(productId);
 
       alert("Product deleted successfully!");
-
       router.push("/products");
     } catch (error) {
       console.error(error);
@@ -144,9 +161,7 @@ export default function ProductDetailsPage() {
     return (
       <main className="min-h-screen bg-gray-100 px-4 py-8">
         <div className="mx-auto max-w-6xl rounded-xl bg-white p-10 text-center shadow">
-          <p className="text-gray-600">
-            Loading product...
-          </p>
+          <p className="text-gray-600">Loading product...</p>
         </div>
       </main>
     );
@@ -156,9 +171,7 @@ export default function ProductDetailsPage() {
     return (
       <main className="min-h-screen bg-gray-100 px-4 py-8">
         <div className="mx-auto max-w-2xl rounded-xl bg-white p-10 text-center shadow">
-          <div className="mb-4 text-5xl">
-            ⚠️
-          </div>
+          <div className="mb-4 text-5xl">⚠️</div>
 
           <h1 className="text-2xl font-bold text-gray-900">
             Product Not Found
@@ -183,7 +196,6 @@ export default function ProductDetailsPage() {
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-8">
       <div className="mx-auto max-w-6xl">
-
         <button
           type="button"
           onClick={() => router.push("/products")}
@@ -194,22 +206,18 @@ export default function ProductDetailsPage() {
         </button>
 
         <div className="overflow-hidden rounded-xl bg-white shadow">
-
           <div className="grid gap-8 p-6 md:grid-cols-2 md:p-8">
-
+            {/* Product Image */}
             <div className="flex items-center justify-center rounded-xl bg-gray-50 p-6">
               <img
-                src={
-                  product.images?.[0] ||
-                  product.thumbnail
-                }
-                alt={product.title}
+                src={product.images?.[0] || product.thumbnail || ""}
+                alt={product.title || "Product"}
                 className="max-h-[450px] w-full object-contain"
               />
             </div>
 
+            {/* Product Information */}
             <div>
-
               <span className="inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">
                 {product.category}
               </span>
@@ -227,99 +235,78 @@ export default function ProductDetailsPage() {
                 </p>
               )}
 
+              {/* Price */}
               <div className="mt-6">
-                <p className="text-sm text-gray-500">
-                  Price
-                </p>
-
+                <p className="text-sm text-gray-500">Price</p>
                 <p className="text-4xl font-bold text-green-600">
                   ${product.price}
                 </p>
               </div>
 
+              {/* Rating and Stock */}
               <div className="mt-5 flex flex-wrap gap-4">
-
                 <div className="rounded-lg bg-yellow-50 px-4 py-3">
-                  <p className="text-sm text-gray-500">
-                    Rating
-                  </p>
-
+                  <p className="text-sm text-gray-500">Rating</p>
                   <p className="font-bold text-gray-900">
-                    ⭐ {product.rating}
+                    ⭐ {product.rating ?? "N/A"}
                   </p>
                 </div>
 
                 <div className="rounded-lg bg-blue-50 px-4 py-3">
-                  <p className="text-sm text-gray-500">
-                    Stock
-                  </p>
-
+                  <p className="text-sm text-gray-500">Stock</p>
                   <p className="font-bold text-gray-900">
-                    {product.stock}
+                    {product.stock ?? "N/A"}
                   </p>
                 </div>
-
               </div>
 
+              {/* Description */}
               <div className="mt-6">
                 <h2 className="text-lg font-semibold text-gray-900">
                   Description
                 </h2>
-
                 <p className="mt-2 leading-7 text-gray-600">
-                  {product.description ||
-                    "No description available."}
+                  {product.description || "No description available."}
                 </p>
               </div>
 
+              {/* Extra Information */}
               <div className="mt-6 space-y-2 text-sm">
-
                 {product.sku && (
                   <p>
-                    <span className="font-semibold">
-                      SKU:
-                    </span>{" "}
+                    <span className="font-semibold">SKU:</span>{" "}
                     {product.sku}
                   </p>
                 )}
 
                 {product.warrantyInformation && (
                   <p>
-                    <span className="font-semibold">
-                      Warranty:
-                    </span>{" "}
+                    <span className="font-semibold">Warranty:</span>{" "}
                     {product.warrantyInformation}
                   </p>
                 )}
 
                 {product.shippingInformation && (
                   <p>
-                    <span className="font-semibold">
-                      Shipping:
-                    </span>{" "}
+                    <span className="font-semibold">Shipping:</span>{" "}
                     {product.shippingInformation}
                   </p>
                 )}
 
                 {product.availabilityStatus && (
                   <p>
-                    <span className="font-semibold">
-                      Availability:
-                    </span>{" "}
+                    <span className="font-semibold">Availability:</span>{" "}
                     {product.availabilityStatus}
                   </p>
                 )}
-
               </div>
 
+              {/* Actions */}
               <div className="mt-8 flex flex-wrap gap-3">
-
                 <button
                   type="button"
                   onClick={() =>
-                    router.push(
-                      "/products/" + productId + "/edit"
-                    )
+                    router.push(`/products/${productId}/edit`)
                   }
                   disabled={deleting}
                   className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
@@ -333,78 +320,53 @@ export default function ProductDetailsPage() {
                   disabled={deleting}
                   className="rounded-lg bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {deleting
-                    ? "Deleting..."
-                    : "🗑️ Delete Product"}
+                  {deleting ? "Deleting..." : "🗑️ Delete Product"}
                 </button>
-
               </div>
-
             </div>
           </div>
 
+          {/* Reviews */}
           <div className="border-t p-6 md:p-8">
-
             <h2 className="text-2xl font-bold text-gray-900">
               Customer Reviews
             </h2>
 
-            {product.reviews &&
-            product.reviews.length > 0 ? (
+            {product.reviews && product.reviews.length > 0 ? (
               <div className="mt-5 space-y-4">
-
-                {product.reviews.map(
-                  (review, index) => (
-                    <div
-                      key={
-                        review.reviewerEmail +
-                        "-" +
-                        index
-                      }
-                      className="rounded-lg border bg-gray-50 p-5"
-                    >
-
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-
-                        <p className="font-semibold text-gray-900">
-                          {review.reviewerName ||
-                            "Customer"}
-                        </p>
-
-                        <p className="text-sm">
-                          ⭐ {review.rating}
-                        </p>
-
-                      </div>
-
-                      <p className="mt-3 text-gray-600">
-                        {review.comment}
+                {product.reviews.map((review, index) => (
+                  <div
+                    key={`${review.reviewerEmail || "review"}-${index}`}
+                    className="rounded-lg border bg-gray-50 p-5"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <p className="font-semibold text-gray-900">
+                        {review.reviewerName || "Customer"}
                       </p>
 
-                      {review.date && (
-                        <p className="mt-2 text-xs text-gray-400">
-                          {new Date(
-                            review.date
-                          ).toLocaleDateString()}
-                        </p>
-                      )}
-
+                      <p className="text-sm">⭐ {review.rating}</p>
                     </div>
-                  )
-                )}
 
+                    <p className="mt-3 text-gray-600">
+                      {review.comment}
+                    </p>
+
+                    {review.date && (
+                      <p className="mt-2 text-xs text-gray-400">
+                        {new Date(review.date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="mt-4 text-gray-500">
                 No reviews available.
               </p>
             )}
-
           </div>
-
         </div>
       </div>
     </main>
   );
 }
-

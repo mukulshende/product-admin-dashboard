@@ -88,10 +88,10 @@ export default function AddProductPage() {
         Therefore we also save it in localStorage.
       */
       const localProduct = {
-        ...response,
-        ...product,
-      };
-
+              ...response,
+              ...product,
+              id: -Date.now(),
+            };
       addLocalProduct(localProduct);
 
       alert("Product added successfully!");

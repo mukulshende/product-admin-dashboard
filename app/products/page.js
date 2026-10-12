@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -7,7 +8,10 @@ import {
   useState,
 } from "react";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 import {
   getCategories,
@@ -20,7 +24,6 @@ import {
   getAddedProducts,
   getDeletedProductIds,
   getUpdatedProducts,
-  applyLocalProductChanges,
 } from "../../lib/productStore";
 
 import Navbar from "../../components/Navbar";
@@ -37,19 +40,15 @@ function ProductsPageContent() {
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [categoryLoading, setCategoryLoading] = useState(true);
-
   const [error, setError] = useState("");
   const [searchError, setSearchError] = useState("");
-
   const [retryKey, setRetryKey] = useState(0);
-
-  const [deleting, setDeleting] = useState(false);
 
   const rawPage = searchParams.get("page");
   const rawLimit = searchParams.get("limit");
+
   const search = searchParams.get("search") || "";
   const category = searchParams.get("category") || "";
   const sortBy = searchParams.get("sortBy") || "";
@@ -69,28 +68,24 @@ function ProductsPageContent() {
     ? parsedLimit
     : 10;
 
+  // Update URL
   const updateURL = (values) => {
-    const params = new URLSearchParams(
-      searchParams.toString()
-    );
+    const params = new URLSearchParams(searchParams.toString());
 
-    Object.entries(values).forEach(
-      ([key, value]) => {
-        if (
-          value === "" ||
-          value === null ||
-          value === undefined
-        ) {
-          params.delete(key);
-        } else {
-          params.set(key, String(value));
-        }
+    Object.entries(values).forEach(([key, value]) => {
+      if (
+        value === "" ||
+        value === null ||
+        value === undefined
+      ) {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
       }
-    );
+    });
 
-    router.push(
-      "/products?" + params.toString()
-    );
+    const query = params.toString();
+    router.push(query ? `/products?${query}` : "/products");
   };
 
   // Authentication check
@@ -107,12 +102,10 @@ function ProductsPageContent() {
     const loadCategories = async () => {
       try {
         setCategoryLoading(true);
-
         const data = await getCategories();
-
         setCategories(data || []);
       } catch (error) {
-        console.error(error);
+        console.error("Category loading error:", error);
       } finally {
         setCategoryLoading(false);
       }
@@ -121,7 +114,7 @@ function ProductsPageContent() {
     loadCategories();
   }, []);
 
-  // Load products
+  // Load products and merge local changes
   useEffect(() => {
     const controller = new AbortController();
 
@@ -162,37 +155,79 @@ function ProductsPageContent() {
 
         let loadedProducts = data.products || [];
 
-        const deletedIds =
-          getDeletedProductIds();
+        const deletedIds = getDeletedProductIds();
+        const addedProducts = getAddedProducts();
+        const updatedProducts = getUpdatedProducts();
 
-        const addedProducts =
-          getAddedProducts();
-
-        const updatedProducts =
-          getUpdatedProducts();
-
-        loadedProducts =
-          applyLocalProductChanges(
-            loadedProducts,
-            deletedIds,
-            addedProducts,
-            updatedProducts
-          );
-
-        setProducts(loadedProducts);
-
-        // Correct invalid page number
-        const total = data.total || 0;
-        const totalPages = Math.max(
-          1,
-          Math.ceil(total / limit)
+        // Hide deleted products
+        loadedProducts = loadedProducts.filter(
+          (product) =>
+            !deletedIds.includes(Number(product.id))
         );
 
-        if (page > totalPages) {
-          updateURL({
-            page: totalPages,
+        // Apply saved updates to API products
+        loadedProducts = loadedProducts.map((product) => {
+          const localUpdated =
+            updatedProducts[String(product.id)];
+
+          return localUpdated
+            ? { ...product, ...localUpdated }
+            : product;
+        });
+
+        // Add local products and apply their saved updates too
+        const existingIds = new Set(
+          loadedProducts.map((product) => Number(product.id))
+        );
+
+        const localProducts = addedProducts
+          .filter(
+            (product) =>
+              !deletedIds.includes(Number(product.id)) &&
+              !existingIds.has(Number(product.id))
+          )
+          .map((product) => {
+            const localUpdated =
+              updatedProducts[String(product.id)];
+
+            return localUpdated
+              ? { ...product, ...localUpdated }
+              : product;
           });
+
+        loadedProducts = [
+          ...localProducts,
+          ...loadedProducts,
+        ];
+
+        // Search and category filtering should include local products.
+        if (search.trim()) {
+          const query = search.trim().toLowerCase();
+
+          loadedProducts = loadedProducts.filter(
+            (product) =>
+              String(product.title || "")
+                .toLowerCase()
+                .includes(query) ||
+              String(product.description || "")
+                .toLowerCase()
+                .includes(query) ||
+              String(product.category || "")
+                .toLowerCase()
+                .includes(query)
+          );
+        } else if (category) {
+          loadedProducts = loadedProducts.filter(
+            (product) =>
+              String(product.category || "").toLowerCase() ===
+              String(category).toLowerCase()
+          );
         }
+
+        console.log("Updated Products:", updatedProducts);
+        console.log("Products after local merge:", loadedProducts);
+
+        setProducts(loadedProducts);
       } catch (error) {
         if (
           error.name === "CanceledError" ||
@@ -202,16 +237,12 @@ function ProductsPageContent() {
         }
 
         console.error(error);
-
-        setError(
-          "Failed to load products. Please try again."
-        );
-
-        setSearchError(
-          "Unable to load products."
-        );
+        setError("Failed to load products. Please try again.");
+        setSearchError("Unable to load products.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -220,15 +251,9 @@ function ProductsPageContent() {
     return () => {
       controller.abort();
     };
-  }, [
-    page,
-    limit,
-    search,
-    category,
-    retryKey,
-  ]);
+  }, [page, limit, search, category, retryKey]);
 
-  // Sort products on frontend
+  // Sort products
   const sortedProducts = useMemo(() => {
     const result = [...products];
 
@@ -247,13 +272,8 @@ function ProductsPageContent() {
         valueA = Number(a.rating) || 0;
         valueB = Number(b.rating) || 0;
       } else if (sortBy === "title") {
-        valueA = String(
-          a.title || ""
-        ).toLowerCase();
-
-        valueB = String(
-          b.title || ""
-        ).toLowerCase();
+        valueA = String(a.title || "").toLowerCase();
+        valueB = String(b.title || "").toLowerCase();
       } else {
         return 0;
       }
@@ -270,12 +290,9 @@ function ProductsPageContent() {
     });
 
     return result;
-  }, [
-    products,
-    sortBy,
-    order,
-  ]);
+  }, [products, sortBy, order]);
 
+  // Search
   const handleSearch = (value) => {
     updateURL({
       search: value.trim(),
@@ -284,9 +301,8 @@ function ProductsPageContent() {
     });
   };
 
-  const handleCategoryChange = (
-    value
-  ) => {
+  // Category
+  const handleCategoryChange = (value) => {
     updateURL({
       category: value,
       search: "",
@@ -294,10 +310,8 @@ function ProductsPageContent() {
     });
   };
 
-  const handleSortChange = (
-    newSortBy,
-    newOrder
-  ) => {
+  // Sort
+  const handleSortChange = (newSortBy, newOrder) => {
     updateURL({
       sortBy: newSortBy,
       order: newOrder,
@@ -305,47 +319,42 @@ function ProductsPageContent() {
     });
   };
 
-  const handlePageChange = (
-    newPage
-  ) => {
+  // Page change
+  const handlePageChange = (newPage) => {
     updateURL({
       page: newPage,
     });
   };
 
-  const handleLimitChange = (
-    newLimit
-  ) => {
+  // Page size change
+  const handleLimitChange = (newLimit) => {
     updateURL({
       limit: newLimit,
       page: 1,
     });
   };
 
+  // Retry
   const handleRetry = () => {
-    setRetryKey(
-      (previous) => previous + 1
-    );
+    setRetryKey((previous) => previous + 1);
   };
 
+  // Logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
     router.replace("/");
   };
 
   const hasSearchOrFilter =
-    Boolean(search.trim()) ||
-    Boolean(category);
+    Boolean(search.trim()) || Boolean(category);
 
   return (
     <main className="min-h-screen bg-gray-100">
-      <Navbar
-        onLogout={handleLogout}
-      />
+      <Navbar onLogout={handleLogout} />
 
       <div className="mx-auto max-w-7xl px-4 py-6">
+        {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -360,11 +369,7 @@ function ProductsPageContent() {
 
             <button
               type="button"
-              onClick={() =>
-                router.push(
-                  "/products/add"
-                )
-              }
+              onClick={() => router.push("/products/add")}
               className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
             >
               + Add Product
@@ -372,6 +377,7 @@ function ProductsPageContent() {
           </div>
         </div>
 
+        {/* Search and Filters */}
         <div className="mb-6 rounded-xl bg-white p-4 shadow">
           <div className="grid gap-4 md:grid-cols-2">
             <SearchBar
@@ -384,39 +390,29 @@ function ProductsPageContent() {
               category={category}
               sortBy={sortBy}
               order={order}
-              onCategoryChange={
-                handleCategoryChange
-              }
-              onSortChange={
-                handleSortChange
-              }
-              categoryLoading={
-                categoryLoading
-              }
-              searchActive={
-                Boolean(search.trim())
-              }
+              onCategoryChange={handleCategoryChange}
+              onSortChange={handleSortChange}
+              categoryLoading={categoryLoading}
+              searchActive={Boolean(search.trim())}
             />
           </div>
         </div>
 
+        {/* Loading */}
         {loading ? (
           <div className="rounded-xl bg-white p-10 shadow">
             <Loader />
           </div>
         ) : error ? (
+          /* Error */
           <div className="rounded-xl bg-white p-10 text-center shadow">
-            <div className="mb-4 text-5xl">
-              ⚠️
-            </div>
+            <div className="mb-4 text-5xl">⚠️</div>
 
             <h2 className="text-xl font-bold text-gray-900">
               Something went wrong
             </h2>
 
-            <p className="mt-2 text-gray-500">
-              {error}
-            </p>
+            <p className="mt-2 text-gray-500">{error}</p>
 
             <button
               type="button"
@@ -426,12 +422,10 @@ function ProductsPageContent() {
               Retry
             </button>
           </div>
-        ) : sortedProducts.length ===
-          0 ? (
+        ) : sortedProducts.length === 0 ? (
+          /* Empty */
           <div className="rounded-xl bg-white p-10 text-center shadow">
-            <div className="mb-4 text-5xl">
-              🔍
-            </div>
+            <div className="mb-4 text-5xl">🔍</div>
 
             <h2 className="text-xl font-bold text-gray-900">
               No products found
@@ -458,6 +452,7 @@ function ProductsPageContent() {
             </button>
           </div>
         ) : (
+          /* Product List */
           <>
             {searchError && (
               <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
@@ -465,45 +460,33 @@ function ProductsPageContent() {
               </div>
             )}
 
+            {/* Desktop Table */}
             <div className="hidden md:block">
-              <ProductTable
-                products={
-                  sortedProducts
-                }
-              />
+              <ProductTable products={sortedProducts} />
             </div>
 
+            {/* Mobile Cards */}
             <div className="grid gap-4 md:hidden">
-              {sortedProducts.map(
-                (product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                  />
-                )
-              )}
+              {sortedProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                />
+              ))}
             </div>
 
+            {/* Pagination */}
             <div className="mt-6">
               <Pagination
                 page={page}
                 limit={limit}
                 total={
-                  sortedProducts.length <
-                  limit &&
-                  page === 1
+                  sortedProducts.length < limit && page === 1
                     ? sortedProducts.length
-                    : Math.max(
-                        sortedProducts.length,
-                        limit
-                      )
+                    : Math.max(sortedProducts.length, limit)
                 }
-                onPageChange={
-                  handlePageChange
-                }
-                onLimitChange={
-                  handleLimitChange
-                }
+                onPageChange={handlePageChange}
+                onLimitChange={handleLimitChange}
               />
             </div>
           </>
